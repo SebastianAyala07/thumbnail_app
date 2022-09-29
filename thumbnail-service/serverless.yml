@@ -20,6 +20,21 @@ provider:
           Resource: '*'
           Action: 's3:*'
 
+custom:
+  bucket: thumbnails-service
+  pythonRequirements:
+    dockerize: true
+
 functions:
-  hello:
-    handler: handler.hello
+  s3-thumbnail-generator:
+    handler: handler.s3_thumbnail_generator
+    events:
+      - s3:
+          bucket: ${self:custom.bucket}
+          event: s3:ObjectCreated:*
+          rules:
+            - suffix: .png
+
+plugins:
+  - serverless-offline
+  - serverless-python-requirements
