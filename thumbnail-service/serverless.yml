@@ -10,8 +10,9 @@ provider:
   timeout: 10
   memorySize: 128
   environment:
-    THUMBNAIL_SIZE: 128
+    THUMBNAIL_SIZE: 0.25
     REGION_NAME: ${self:provider.region}
+    DYNAMODB_TABLE: ${self:custom.dynamoTable}
 
   iam:
     role:
@@ -19,21 +20,54 @@ provider:
         - Effect: 'Allow'
           Resource: '*'
           Action: 's3:*'
+        - Effect: 'Allow'
+          Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
 
 custom:
   bucket: thumbnails-service
+  dynamoTable: img-url-table
   pythonRequirements:
     dockerize: true
+    layer:
+      name: thumbnail-dependencies
+      description: thumbnail requirements libraries
+      compatibleRuntimes:
+        - python3.8
 
 functions:
-  s3-thumbnail-generator:
+  s3_thumbnail_generator:
     handler: handler.s3_thumbnail_generator
+    layers:
+      - Ref: PythonRequirementsLambdaLayer
     events:
       - s3:
           bucket: ${self:custom.bucket}
           event: s3:ObjectCreated:*
           rules:
             - suffix: .png
+
+resources:
+  Resources:
+    ImagesDynamoDbTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
 
 plugins:
   - serverless-offline
